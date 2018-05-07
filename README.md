@@ -12,7 +12,7 @@ This program iterates over all k-cliques and generates the k-clique weighted adj
 Running "make" will compile the code and run some basic tests
 
 ## To execute:
-"./kClistDens p k edgelist.txt".  
+"./kClistMatrix p k edgelist.txt".  
 - "edgelist.txt" should contain the graph: one edge on each line (i, j, w)  separated by a space.
 - k is the size of the k-cliques
 - p is the number of threads
