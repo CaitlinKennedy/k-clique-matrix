@@ -1,6 +1,7 @@
 
 # Info:
 Code to generate the clique weighted matrix based on github repository maxdan94/kClist
+(kClistMatrix.cpp is a heavily modified version of maxdan94/kClist/kClistDens.c)
 
 # kClistMatrix.cpp
 
