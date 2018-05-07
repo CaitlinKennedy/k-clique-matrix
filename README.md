@@ -4,7 +4,7 @@ Code to generate the clique weighted matrix based on github repository maxdan94/
 
 # kClistMatrix.cpp
 
-This program iterates over all k-cliques. And generates the k-clique weighted adjacency matrix.  It is highly scallable.
+This program iterates over all k-cliques and generates the k-clique weighted adjacency matrix.
 
 ## To compile:
 "g++ kClistMatrix.cpp -O9 -o kClistMatrix -fopenmp".
