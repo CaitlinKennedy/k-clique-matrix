@@ -28,8 +28,9 @@ Will print the number of k-cliques and the density of the found kclique densest.
 #define NLINKS 100000000 //maximum number of edges for memory allocation, will increase if needed
 
 class Clique_Matrix {
-	std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>> clique_mat;
-	void add_edge(unsigned, unsigned);
+	public:
+		std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>> clique_mat;
+		void add_edge(unsigned, unsigned);
 };
 
 void Clique_Matrix::add_edge(unsigned p, unsigned q) {
@@ -438,7 +439,7 @@ void mksub(graph* g,edge ed,subgraph* sg,unsigned char k){
 unsigned long long *ckdeg_p,*ckdeg;
 unsigned * ck_buf;
 unsigned *ck_p;
-unsigned ** motif_weight_mat;
+Clique_Matrix ck_m;
 int pos;
 #pragma omp threadprivate(ckdeg_p,ck_p,ck_buf,pos)
 
@@ -447,8 +448,8 @@ int pos;
 		for(int i=0; i<pos; i=i+k) {  //<pos
 			for(int p=0; p < k; p++) {
 				for(int q=p+1;q<k;q++) {
-					motif_weight_mat[ck_buf[i+p]][ck_buf[i+q]]+=1;
-					motif_weight_mat[ck_buf[i+q]][ck_buf[i+p]]+=1;
+					ck_m.add_edge(ck_buf[i+p], ck_buf[i+q]);
+					ck_m.add_edge(ck_buf[i+q], ck_buf[i+p]);
 				}
 			}
 		}
@@ -465,7 +466,7 @@ int pos;
 		}
 	}
 
-void allocglobal(graph *g,unsigned k, unsigned number_of_nodes){
+void allocglobal(graph *g,unsigned k){
         #pragma omp parallel
         {
                 ck_p=(unsigned *)calloc(k,sizeof(unsigned));
@@ -474,10 +475,6 @@ void allocglobal(graph *g,unsigned k, unsigned number_of_nodes){
 								pos = 0;
         }
         ckdeg=(unsigned long long *)calloc(g->n,sizeof(unsigned long long));
-				motif_weight_mat = (unsigned **)calloc(number_of_nodes,sizeof(unsigned *));
-				for (int p = 0; p < number_of_nodes; p++){
-					motif_weight_mat[p] = (unsigned *)calloc(number_of_nodes, sizeof(unsigned));
-				}
 }
 
 void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned long long *n, unsigned * node_map) {
@@ -684,7 +681,7 @@ int main(int argc,char** argv){
 
 	unsigned i,n_m,e_m;
 	bool *rm=(bool*)calloc(g->n,sizeof(bool));
-	allocglobal(g,k, number_of_nodes);//allocataing global variables
+	allocglobal(g,k);//allocataing global variables
 	nck=kclique_main(k, g, el->node_map);
 
 	if (!test){
@@ -697,8 +694,10 @@ int main(int argc,char** argv){
 	t1=t2;
 	for(int p=0; p<number_of_nodes; p++) {
     for (int q=0; q<number_of_nodes; q++) {
-			if (motif_weight_mat[p][q] != 0) {
-      	printf("%u %u %u\n", p, q, motif_weight_mat[p][q]);  //errors 5 0 4  4 0 10   0 5 4  0 4 10   0 0 14
+			//find end not zero
+			std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>>::iterator it = ck_m.clique_mat.find(std::make_pair(p, q));
+			if (it != ck_m.clique_mat.end()) {
+      	printf("%u %u %u\n", p, q, it->second); 
 			}
     }
   }
