@@ -1,10 +1,11 @@
 CC=gcc-7
 CFLAGS=-O9
+CP=g++-7
 
 all: kClistMatrix test
 
-kClistMatrix : kClistMatrix.c
-	$(CC) $(CFLAGS) kClistMatrix.c -o kClistMatrix -fopenmp
+kClistMatrix: kClistMatrix.cpp
+	$(CP) $(CFLAGS) kClistMatrix.cpp -o kClistMatrix -fopenmp
 
 test1:
 	@./kClistMatrix 1 3 simplegraph.txt 1 > test1.txt

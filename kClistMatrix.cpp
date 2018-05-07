@@ -21,9 +21,27 @@ Will print the number of k-cliques and the density of the found kclique densest.
 #include <string.h>
 #include <time.h>
 #include <omp.h>
+#include <unordered_map>
+#include <boost/functional/hash.hpp>
 
 
 #define NLINKS 100000000 //maximum number of edges for memory allocation, will increase if needed
+
+class Clique_Matrix {
+	std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>> clique_mat;
+	void add_edge(unsigned, unsigned);
+};
+
+void Clique_Matrix::add_edge(unsigned p, unsigned q) {
+	//see if edge exists
+	std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>>::iterator it = clique_mat.find(std::make_pair(p, q));
+	if (it != clique_mat.end()) {
+		it->second++;
+	}
+	else {
+		clique_mat.insert(std::make_pair(std::make_pair(p, q), 1));
+	}
+}
 
 typedef struct {
 	unsigned s;
@@ -91,13 +109,13 @@ inline unsigned int max3(unsigned int a,unsigned int b,unsigned int c){
 
 edgelist* readedgelist(char* input){
 	unsigned e1=NLINKS;
-	edgelist *el=malloc(sizeof(edgelist));
+	edgelist *el=(edgelist*)malloc(sizeof(edgelist));
 	FILE *file;
 
 	el->n=0;
 	el->e=0;
 	file=fopen(input,"r");
-	el->edges=malloc(e1*sizeof(edge));
+	el->edges=(edge*)malloc(e1*sizeof(edge));
 	unsigned w = 1;
 	unsigned s = 1;
 	unsigned t = 1;
@@ -110,15 +128,15 @@ edgelist* readedgelist(char* input){
 			el->e++;
 			if (el->e==e1) {
 				e1+=NLINKS;
-				el->edges=realloc(el->edges,e1*sizeof(edge));
+				el->edges=(edge*)realloc(el->edges,e1*sizeof(edge));
 			}
 		}
 	}
 	fclose(file);
 	el->n++;
 
-	el->edges=realloc(el->edges,el->e*sizeof(edge));
-	el->node_map=malloc((el->n)*sizeof(unsigned));
+	el->edges=(edge*)realloc(el->edges,el->e*sizeof(edge));
+	el->node_map=(unsigned*)malloc((el->n)*sizeof(unsigned));
 
 
 	return el;
@@ -176,13 +194,13 @@ typedef struct {
 
 bheap *construct(unsigned n_max){
 	unsigned i;
-	bheap *heap=malloc(sizeof(bheap));
+	bheap *heap=(bheap*)malloc(sizeof(bheap));
 
 	heap->n_max=n_max;
 	heap->n=0;
-	heap->pt=malloc(n_max*sizeof(unsigned));
+	heap->pt=(unsigned *)malloc(n_max*sizeof(unsigned));
 	for (i=0;i<n_max;i++) heap->pt[i]=-1;
-	heap->kv=malloc(n_max*sizeof(keyvalue));
+	heap->kv=(keyvalue*)malloc(n_max*sizeof(keyvalue));
 	return heap;
 }
 
@@ -270,9 +288,9 @@ void ord_core(edgelist* el){
 	keyvalue kv;
 	bheap *heap;
 
-	unsigned *d0=calloc(el->n,sizeof(unsigned));
-	unsigned *cd0=malloc((el->n+1)*sizeof(unsigned));
-	unsigned *adj0=malloc(2*el->e*sizeof(unsigned));
+	unsigned *d0=(unsigned*)calloc(el->n,sizeof(unsigned));
+	unsigned *cd0=(unsigned *)malloc((el->n+1)*sizeof(unsigned));
+	unsigned *adj0=(unsigned *)malloc(2*el->e*sizeof(unsigned));
 	for (i=0;i<e;i++) {
 		d0[el->edges[i].s]++;
 		d0[el->edges[i].t]++;
@@ -289,7 +307,7 @@ void ord_core(edgelist* el){
 
 	heap=mkheap(n,d0);
 
-	el->rank=malloc(n*sizeof(unsigned));
+	el->rank=(unsigned *)malloc(n*sizeof(unsigned));
 	for (i=0;i<n;i++){
 		kv=popmin(heap);
 		el->rank[kv.key]=n-(++r);
@@ -308,15 +326,15 @@ void ord_core(edgelist* el){
 graph* mkgraph(edgelist *el){
 	unsigned i,max;
 	unsigned *d;
-	graph* g=malloc(sizeof(graph));
+	graph* g=(graph*)malloc(sizeof(graph));
 
-	d=calloc(el->n,sizeof(unsigned));
+	d=(unsigned *)calloc(el->n,sizeof(unsigned));
 
 	for (i=0;i<el->e;i++) {
 		d[el->edges[i].s]++;
 	}
 
-	g->cd=malloc((el->n+1)*sizeof(unsigned));
+	g->cd=(unsigned *)malloc((el->n+1)*sizeof(unsigned));
 	g->cd[0]=0;
 	max=0;
 	for (i=1;i<el->n+1;i++) {
@@ -326,7 +344,7 @@ graph* mkgraph(edgelist *el){
 	}
 	//printf("core value (max truncated degree) = %u\n",max);
 
-	g->adj=malloc(el->e*sizeof(unsigned));
+	g->adj=(unsigned *)malloc(el->e*sizeof(unsigned));
 
 	for (i=0;i<el->e;i++) {
 		g->adj[ g->cd[el->edges[i].s] + d[ el->edges[i].s ]++ ]=el->edges[i].t;
@@ -347,33 +365,33 @@ graph* mkgraph(edgelist *el){
 
 subgraph* allocsub(graph *g,unsigned char k){
 	unsigned i;
-	subgraph* sg=malloc(sizeof(subgraph));
-	sg->n=calloc(k,sizeof(unsigned));
-	sg->d=malloc(k*sizeof(unsigned*));
-	sg->nodes=malloc(k*sizeof(unsigned*));
+	subgraph* sg=(subgraph *)malloc(sizeof(subgraph));
+	sg->n=(unsigned *)calloc(k,sizeof(unsigned));
+	sg->d=(unsigned **)malloc(k*sizeof(unsigned*));
+	sg->nodes=(unsigned **)malloc(k*sizeof(unsigned*));
 	for (i=1;i<k;i++){/////////
-		sg->d[i]=malloc(g->core*sizeof(unsigned));
-		sg->nodes[i]=malloc(g->core*sizeof(unsigned));
+		sg->d[i]=(unsigned *)malloc(g->core*sizeof(unsigned));
+		sg->nodes[i]=(unsigned *)malloc(g->core*sizeof(unsigned));
 	}
-	sg->lab=calloc(g->core,sizeof(unsigned char));
-	sg->adj=malloc(g->core*g->core*sizeof(unsigned));
+	sg->lab=(unsigned char *)calloc(g->core,sizeof(unsigned char));
+	sg->adj=(unsigned *)malloc(g->core*g->core*sizeof(unsigned));
 	sg->core=g->core;
 	return sg;
 }
 
 
-unsigned *old=NULL,*new=NULL;//to improve
-#pragma omp threadprivate(new,old)
+unsigned *old=NULL,*newN=NULL;//to improve
+#pragma omp threadprivate(newN,old)
 
 void mksub(graph* g,edge ed,subgraph* sg,unsigned char k){
 	unsigned i,j,l,x,y;
 	unsigned u=ed.s,v=ed.t;
 
 	if (old==NULL){
-		new=malloc(g->n*sizeof(unsigned));
-		old=malloc(g->core*sizeof(unsigned));
+		newN=(unsigned *)malloc(g->n*sizeof(unsigned));
+		old=(unsigned *)malloc(g->core*sizeof(unsigned));
 		for (i=0;i<g->n;i++){
-			new[i]=-1;
+			newN[i]=-1;
 		}
 	}
 
@@ -382,14 +400,14 @@ void mksub(graph* g,edge ed,subgraph* sg,unsigned char k){
 	}
 
 	for (i=g->cd[v];i<g->cd[v+1];i++){
-		new[g->adj[i]]=-2;
+		newN[g->adj[i]]=-2;
 	}
 
 	j=0;
 	for (i=g->cd[u];i<g->cd[u+1];i++){
 		x=g->adj[i];
-		if (new[x]==-2){
-			new[x]=j;
+		if (newN[x]==-2){
+			newN[x]=j;
 			old[j]=x;
 			sg->lab[j]=k-2;
 			sg->nodes[k-2][j]=j;
@@ -404,7 +422,7 @@ void mksub(graph* g,edge ed,subgraph* sg,unsigned char k){
 		x=old[i];
 		for (l=g->cd[x];l<g->cd[x+1];l++){
 			y=g->adj[l];
-			j=new[y];
+			j=newN[y];
 			if (j<-2){
 				sg->adj[sg->core*i+sg->d[k-2][i]++]=j;
 			}
@@ -412,7 +430,7 @@ void mksub(graph* g,edge ed,subgraph* sg,unsigned char k){
 	}
 
 	for (i=g->cd[v];i<g->cd[v+1];i++){
-		new[g->adj[i]]=-1;
+		newN[g->adj[i]]=-1;
 	}
 }
 
@@ -450,15 +468,15 @@ int pos;
 void allocglobal(graph *g,unsigned k, unsigned number_of_nodes){
         #pragma omp parallel
         {
-                ck_p=calloc(k,sizeof(unsigned));
-                ckdeg_p=calloc(g->n,sizeof(unsigned long long));
-								ck_buf=calloc(100000, sizeof(unsigned));
+                ck_p=(unsigned *)calloc(k,sizeof(unsigned));
+                ckdeg_p=(unsigned long long *)calloc(g->n,sizeof(unsigned long long));
+								ck_buf=(unsigned *)calloc(100000, sizeof(unsigned));
 								pos = 0;
         }
-        ckdeg=calloc(g->n,sizeof(unsigned long long));
-				motif_weight_mat = calloc(number_of_nodes,sizeof(unsigned *));
+        ckdeg=(unsigned long long *)calloc(g->n,sizeof(unsigned long long));
+				motif_weight_mat = (unsigned **)calloc(number_of_nodes,sizeof(unsigned *));
 				for (int p = 0; p < number_of_nodes; p++){
-					motif_weight_mat[p] = calloc(number_of_nodes, sizeof(unsigned));
+					motif_weight_mat[p] = (unsigned *)calloc(number_of_nodes, sizeof(unsigned));
 				}
 }
 
@@ -488,7 +506,7 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 			u=sg->nodes[2][i];
 			end=u*sg->core+sg->d[2][u];
 			for (j=u*sg->core;j<end;j++) {
-				unsigned * kclique = malloc(kmax*sizeof(unsigned));
+				unsigned * kclique = (unsigned *)malloc(kmax*sizeof(unsigned));
 				int count = 0;
 				//directly below is edge u,v
 				//insert u, v and v,  u
@@ -665,7 +683,7 @@ int main(int argc,char** argv){
 	t1=t2;
 
 	unsigned i,n_m,e_m;
-	bool *rm=calloc(g->n,sizeof(bool));
+	bool *rm=(bool*)calloc(g->n,sizeof(bool));
 	allocglobal(g,k, number_of_nodes);//allocataing global variables
 	nck=kclique_main(k, g, el->node_map);
 
