@@ -1,17 +1,16 @@
 /*
 Info:
 Feel free to use these lines as you wish.
-This program iterates over all k-cliques. It find a k(1+eps) approximation of the kclique densest. It is highly scallable.
+This program iterates over all k-cliques. It is highly scallable.
 
 To compile:
 "gcc kClistDens.c -O9 -o kClistDens -fopenmp".
 
 To execute:
-"./kClistDens p k eps edgelist.txt".
+"./kClistDens p k edgelist.txt".
 "edgelist.txt" should contain the graph: one edge on each line separated by a space.
 k is the size of the k-cliques
 p is the number of threads
-eps is the precision
 Will print the number of k-cliques and the density of the found kclique densest.
 */
 
@@ -42,7 +41,7 @@ typedef struct {
 	edge *edges;//list of edges
 	unsigned *rank;//ranking of the nodes according to degeneracy ordering
 	//unsigned *map;//oldID newID correspondance NOT USED IN THIS VERSION
-	unsigned *node_map; //map from oldid to new id
+	unsigned *node_map; //map from new id to old id
 } edgelist;
 
 typedef struct {
@@ -100,13 +99,19 @@ edgelist* readedgelist(char* input){
 	file=fopen(input,"r");
 	el->edges=malloc(e1*sizeof(edge));
 	unsigned w = 1;
+	unsigned s = 1;
+	unsigned t = 1;
 
-	while (fscanf(file,"%u %u %u", &(el->edges[el->e].s), &(el->edges[el->e].t), &w)==3) {//Add one edge
-		el->n=max3(el->n,el->edges[el->e].s,el->edges[el->e].t);
-		el->e++;
-		if (el->e==e1) {
-			e1+=NLINKS;
-			el->edges=realloc(el->edges,e1*sizeof(edge));
+	while (fscanf(file,"%u %u %u", &s, &t, &w)==3) {//Add one edge
+		if (s < t) {
+			(el->edges[el->e].s) = s;
+			(el->edges[el->e].t) = t;
+			el->n=max3(el->n,el->edges[el->e].s,el->edges[el->e].t);
+			el->e++;
+			if (el->e==e1) {
+				e1+=NLINKS;
+				el->edges=realloc(el->edges,e1*sizeof(edge));
+			}
 		}
 	}
 	fclose(file);
@@ -319,7 +324,7 @@ graph* mkgraph(edgelist *el){
 		max=(max>d[i-1])?max:d[i-1];
 		d[i-1]=0;
 	}
-	printf("core value (max truncated degree) = %u\n",max);
+	//printf("core value (max truncated degree) = %u\n",max);
 
 	g->adj=malloc(el->e*sizeof(unsigned));
 
@@ -413,31 +418,60 @@ void mksub(graph* g,edge ed,subgraph* sg,unsigned char k){
 
 
 unsigned long long *ckdeg_p,*ckdeg;
+unsigned * ck_buf;
 unsigned *ck_p;
-#pragma omp threadprivate(ckdeg_p,ck_p)
+unsigned ** motif_weight_mat;
+int pos;
+#pragma omp threadprivate(ckdeg_p,ck_p,ck_buf,pos)
 
-void add_clique(unsigned k, unsigned*clique, unsigned ** motif_weight_mat) {
-	for (int i = 0; i<k; i++) {
-		for (int j= i+1; j<k; j++) {
-			if (clique[i]-1 < 0 || clique[j]-1<0){
-				printf("ERROR i: %u, j: %u, clique[i]: %u, clique[j]: %u\n",i, j, clique[i], clique[j]);
+// void add_clique(unsigned k, unsigned*clique, unsigned ** motif_weight_mat) {
+// 	for (int i = 0; i<k; i++) {
+// 		for (int j= i+1; j<k; j++) {
+// 			motif_weight_mat[clique[i]][clique[j]]+=1;
+// 			motif_weight_mat[clique[j]][clique[i]]+=1;
+// 		}
+// 	}
+// }
+
+	void add_to_matrix(unsigned k) {
+		#pragma omp critical (mat)
+		for(int i=0; i<pos; i=i+k) {  //<pos
+			for(int p=0; p < k; p++) {
+				for(int q=p+1;q<k;q++) {
+					motif_weight_mat[ck_buf[i+p]][ck_buf[i+q]]+=1;
+					motif_weight_mat[ck_buf[i+q]][ck_buf[i+p]]+=1;
+				}
 			}
-			motif_weight_mat[clique[i]][clique[j]]+=1;
-			motif_weight_mat[clique[j]][clique[i]]+=1;
 		}
 	}
-}
 
-void allocglobal(graph *g,unsigned k){
+	void add_clique(unsigned k, unsigned * clique) {
+		for (int i = 0; i < k; i++) {
+			ck_buf[pos] = clique[i];
+			pos++;
+		}
+		if (pos > 100000) {
+			add_to_matrix(k);
+			pos=0;
+		}
+	}
+
+void allocglobal(graph *g,unsigned k, unsigned number_of_nodes){
         #pragma omp parallel
         {
                 ck_p=calloc(k,sizeof(unsigned));
                 ckdeg_p=calloc(g->n,sizeof(unsigned long long));
+								ck_buf=calloc(100000, sizeof(unsigned));
+								pos = 0;
         }
         ckdeg=calloc(g->n,sizeof(unsigned long long));
+				motif_weight_mat = calloc(number_of_nodes,sizeof(unsigned *));
+				for (int p = 0; p < number_of_nodes; p++){
+					motif_weight_mat[p] = calloc(number_of_nodes, sizeof(unsigned));
+				}
 }
 
-void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned long long *n, unsigned * node_map, unsigned ** motif_weight_mat) {
+void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned long long *n, unsigned * node_map) {
 	unsigned i,j,k,end,u,v,w;
 
 	if (kmax==3){//can be improved
@@ -448,8 +482,8 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 			(*n)++;//listing here!!!
 			//ADD EDGELIST AND PRINT MAPPED NODES
 			unsigned kclique[3] = {node_map[ck_p[1]], node_map[ck_p[2]], node_map[old[sg->nodes[1][i]]]};
-			add_clique(3, kclique, motif_weight_mat);
-			printf("ADD CLIQUE %u,%u,%u\n", node_map[ck_p[1]], node_map[ck_p[2]], node_map[old[sg->nodes[1][i]]]);
+			add_clique(3, kclique);
+			//printf("ADD CLIQUE %u,%u,%u\n", node_map[ck_p[1]], node_map[ck_p[2]], node_map[old[sg->nodes[1][i]]]);
 
 		}
 		for (i=0;i < (sizeof (ckdeg_p) /sizeof (ckdeg_p[0]));i++) {
@@ -479,11 +513,11 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 					count++;
 				}
 				(*n)++;//listing here!!!
-				add_clique(kmax, kclique, motif_weight_mat);
+				add_clique(kmax, kclique);
 				for (int m = 0; m <kmax; m++){
-					printf("%u, ",kclique[m]);
+					//printf("%u, ",kclique[m]);
 				}
-				printf("\n");
+				//printf("\n");
 			}
 
 		}
@@ -520,7 +554,7 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 			}
 		}
 
-		kclique_thread(kmax,l-1, sg, n, node_map, motif_weight_mat);
+		kclique_thread(kmax,l-1, sg, n, node_map);
 
 		for (j=0;j<sg->n[l-1];j++){//restoring labels
 			v=sg->nodes[l-1][j];
@@ -530,7 +564,7 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 	}
 }
 
-unsigned long long kclique_main(unsigned char k, graph *g, unsigned * node_map, unsigned ** motif_weight_mat) {
+unsigned long long kclique_main(unsigned char k, graph *g, unsigned * node_map) {
 	unsigned i;
 	unsigned long long n=0;
 	subgraph *sg;
@@ -543,11 +577,12 @@ unsigned long long kclique_main(unsigned char k, graph *g, unsigned * node_map, 
 			ck_p[k-1]=g->edges[i].s;
 			ck_p[k-2]=g->edges[i].t;
 			mksub(g,g->edges[i],sg,k);
-			kclique_thread(k,k-2, sg, &n,node_map, motif_weight_mat);
+			kclique_thread(k,k-2, sg, &n,node_map);
+
 		}
-
+		add_to_matrix(k);
+		pos=0;
 		free_subgraph(sg,k);
-
 		#pragma omp single
 		{
 		bzero(ckdeg,g->n*sizeof(unsigned long long));
@@ -591,101 +626,77 @@ int main(int argc,char** argv){
 	edgelist* el;
 	graph* g;
 	unsigned char k=atoi(argv[2]);
-	double eps=atof(argv[3]);
 	unsigned long long nck;
-
+	unsigned test = 0;
+	if (argc > 4) {
+		test = 1;
+	}
 	omp_set_num_threads(atoi(argv[1]));
 
 	time_t t0,t1,t2;
 	t1=time(NULL);
 	t0=t1;
 
-	printf("Reading edgelist from file %s\n",argv[4]);
-
-	el=readedgelist(argv[4]);
-
-	printf("Number of nodes = %u\n",el->n);
-	printf("Number of edges = %u\n",el->e);
-	unsigned number_of_nodes = el->n;
-	unsigned ** motif_weight_mat = calloc(number_of_nodes,sizeof(unsigned *));
-	for (int p = 0; p < el->n; p++){
-		motif_weight_mat[p] = calloc(number_of_nodes, sizeof(unsigned));
+	if (!test) {
+		printf("Reading edgelist from file %s\n",argv[3]);
 	}
 
-	t2=time(NULL);
-	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
-	t1=t2;
+	el=readedgelist(argv[3]);
 
-	printf("Building the graph structure\n");
+	if (!test) {
+		printf("Number of nodes = %u\n",el->n);
+		printf("Number of edges = %u\n",el->e);
+	}
+	unsigned number_of_nodes = el->n;
+
+
+	t2=time(NULL);
+	if (!test) {
+		printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	}
+
+
+	if (!test) {
+		printf("Building the graph structure\n");
+	}
 	ord_core(el);
 	relabel(el);
 	g=mkgraph(el);
 
-	printf("Number of nodes (degree > 0) = %u\n",g->n);
+	if (!test) {
+		printf("Number of nodes (degree > 0) = %u\n",g->n);
+	}
 
 	t2=time(NULL);
-	printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	if (!test) {
+		printf("- Time = %ldh%ldm%lds\n",(t2-t1)/3600,((t2-t1)%3600)/60,((t2-t1)%60));
+	}
 	t1=t2;
 
 	unsigned i,n_m,e_m;
-	double rho,rho_m=0,erho,erho_m;
-	unsigned long long nck_m;
 	bool *rm=calloc(g->n,sizeof(bool));
-	allocglobal(g,k);//allocataing global variables
-	nck=kclique_main(k, g, el->node_map, motif_weight_mat);
-	//do{
-		// printf("\nCurrent graph:\n");
+	allocglobal(g,k, number_of_nodes);//allocataing global variables
+	nck=kclique_main(k, g, el->node_map);
+
+	if (!test){
 		printf("Number of %u-cliques: %llu\n",k,nck);
-		// printf("Number of nodes: %u\n",g->n);
-		// printf("Number of edges: %u\n",g->e);
-		erho=2.*((double)g->e)/((double)(g->n*(g->n-1)));
-		// printf("edge density: %le\n",erho);
-		rho=((double)nck)/((double)(g->n));
-		// printf("Density: %le\n",rho);
-		if (rho>rho_m){
-			nck_m=nck;
-			rho_m=rho;
-			erho_m=erho;
-			e_m=g->e;
-			n_m=g->n;
-		}
-		// printf("\nDensest found:\n");
-		// printf("Number of %u-cliques: %llu\n",k,nck_m);
-		// printf("Number of nodes: %u\n",n_m);
-		// printf("Number of edges: %u\n",e_m);
-		// printf("edge density: %le\n",erho_m);
-		// printf("Density: %le\n",rho_m);
-		rho*=k*(1.+eps);
-		// printf("rho = %e\n",rho);
-		unsigned long long r=0,r2=0;
-		// printf("n,m,n,m= %u %u %u %u\n",g->n,g->e,el->n,el->e);
-		for (i=0;i<g->n;i++){
-			//if (rm[i]==1){
-			//	printf("aaaaaaaaaaa\n");
-			//}
-			//r+=ckdeg[i];
-			// printf("end nodes with degrees: %u, %llu\n", el->node_map[i],ckdeg[i]);
-
-			if (((double)ckdeg[i])<rho){
-				rm[i]=1;
-			}
-
-		}
-
-		free_graph(g);
-
+	}
+	unsigned long long r=0,r2=0;
+	free_graph(g);
 
 	t2=time(NULL);
 	t1=t2;
 	for(int p=0; p<number_of_nodes; p++) {
-		for (int q=0; q<number_of_nodes; q++) {
-			printf("%u ", motif_weight_mat[p][q]);
-		}
-		printf("\n");
+    for (int q=0; q<number_of_nodes; q++) {
+			if (motif_weight_mat[p][q] != 0) {
+      	printf("%u %u %u\n", p, q, motif_weight_mat[p][q]);  //errors 5 0 4  4 0 10   0 5 4  0 4 10   0 0 14
+			}
+    }
+  }
+
+	if (!test) {
+		printf("- Overall time = %ldh%ldm%lds\n",(t2-t0)/3600,((t2-t0)%3600)/60,((t2-t0)%60));
 	}
-
-	printf("- Overall time = %ldh%ldm%lds\n",(t2-t0)/3600,((t2-t0)%3600)/60,((t2-t0)%60));
-
 
 	return 0;
 }

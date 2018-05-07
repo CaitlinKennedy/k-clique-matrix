@@ -1,26 +1,47 @@
-CC=gcc
+CC=gcc-7
 CFLAGS=-O9
 
-all: Arboricity kClist kClistCore kClistDens kClistEdgeParallel kClistNodeParallel
+all: kClistMatrix test
 
-Arboricity : Arboricity.c
-	$(CC) $(CFLAGS) Arboricity.c -o Arboricity
+kClistMatrix : kClistMatrix.c
+	$(CC) $(CFLAGS) kClistMatrix.c -o kClistMatrix -fopenmp
 
-kClist : kClist.c
-	$(CC) $(CFLAGS) kClist.c -o kClist
+test1:
+	@./kClistMatrix 1 3 simplegraph.txt 1 > test1.txt
+	@diff -q test1.txt simplegraphtest3.txt
+	@rm test1.txt
 
-kClistCore : kClistCore.c
-	$(CC) $(CFLAGS) kClistCore.c -o kClistCore
+test2:
+	@./kClistMatrix 1 4 simplegraph.txt 1 > test2.txt
+	@diff -q test2.txt simplegraphtest4.txt
+	@rm test2.txt
 
-kClistDens : kClistDens.c
-	$(CC) $(CFLAGS) kClistDens.c -o kClistDens -fopenmp
+test3:
+	@./kClistMatrix 1 5 simplegraph.txt 1 > test3.txt
+	@diff -q test3.txt simplegraphtest5.txt
+	@rm test3.txt
 
-kClistEdgeParallel : kClistEdgeParallel.c
-	$(CC) $(CFLAGS) kClistEdgeParallel.c -o kClistEdgeParallel -fopenmp
+test4:
+	@./kClistMatrix 1 3 edgelist.txt 1 > test4.txt
+	@diff -q test4.txt edgelisttest3.txt
+	@rm test4.txt
 
-kClistNodeParallel : kClistNodeParallel.c
-	$(CC) $(CFLAGS) kClistNodeParallel.c -o kClistNodeParallel -fopenmp
+test5:
+	@./kClistMatrix 1 4 edgelist.txt 1 > test5.txt
+	@diff -q test5.txt edgelisttest4.txt
+	@rm test5.txt
 
+test6:
+	@./kClistMatrix 1 5 edgelist.txt 1 > test6.txt
+	@diff -q test6.txt edgelisttest5.txt
+	@rm test6.txt
+
+test7:
+	@./kClistMatrix 3 3 edgelist.txt 1 > test7.txt
+	@diff -q test7.txt edgelisttest3.txt
+	@rm test7.txt
+
+test: test1 test2 test3 test4 test5 test6 test7
 
 clean:
-	rm Arboricity kClist kClistCore kClistDens kClistEdgeParallel kClistNodeParallel
+	rm  kClistMatrix
