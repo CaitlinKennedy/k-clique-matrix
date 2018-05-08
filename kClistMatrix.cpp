@@ -34,14 +34,7 @@ class Clique_Matrix {
 };
 
 void Clique_Matrix::add_edge(unsigned p, unsigned q) {
-	//see if edge exists
-	std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>>::iterator it = clique_mat.find(std::make_pair(p, q));
-	if (it != clique_mat.end()) {
-		it->second++;
-	}
-	else {
-		clique_mat.insert(std::make_pair(std::make_pair(p, q), 1));
-	}
+	clique_mat[std::make_pair(p,q)]++;
 }
 
 typedef struct {
@@ -697,7 +690,7 @@ int main(int argc,char** argv){
 			//find end not zero
 			std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>>::iterator it = ck_m.clique_mat.find(std::make_pair(p, q));
 			if (it != ck_m.clique_mat.end()) {
-      	printf("%u %u %u\n", p, q, it->second); 
+      	printf("%u %u %u\n", p, q, it->second);
 			}
     }
   }
