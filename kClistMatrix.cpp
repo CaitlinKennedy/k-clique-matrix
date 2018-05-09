@@ -29,12 +29,19 @@ Will print the number of k-cliques and the density of the found kclique densest.
 
 class Clique_Matrix {
 	public:
-		std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>> clique_mat;
+		Clique_Matrix(unsigned);
+		unsigned vector_length;
+		std::vector<std::unordered_map<unsigned, int64_t>> clique_mat;
 		void add_edge(unsigned, unsigned);
 };
 
+Clique_Matrix::Clique_Matrix(unsigned number_of_nodes) {
+	vector_length = number_of_nodes;
+	clique_mat = std::vector<std::unordered_map<unsigned, int64_t>>(number_of_nodes);
+};
+
 void Clique_Matrix::add_edge(unsigned p, unsigned q) {
-	clique_mat[std::make_pair(p,q)]++;
+	clique_mat[p][q]++;
 }
 
 typedef struct {
@@ -432,42 +439,54 @@ void mksub(graph* g,edge ed,subgraph* sg,unsigned char k){
 unsigned long long *ckdeg_p,*ckdeg;
 unsigned * ck_buf;
 unsigned *ck_p;
-Clique_Matrix ck_m;
+Clique_Matrix * ck_m;
+Clique_Matrix *clique_matrix;
 int pos;
-#pragma omp threadprivate(ckdeg_p,ck_p,ck_buf,pos)
+#pragma omp threadprivate(ck_m, ckdeg_p,ck_p,ck_buf,pos)
 
-	void add_to_matrix(unsigned k) {
+	//after the threads are done, combine individual clique matrices to overall one
+	void combine_to_global_matrix() {
 		#pragma omp critical (mat)
+		for (int p = 0; p < ck_m->vector_length; p++) {//vector iterator
+			for (std::pair<unsigned, int64_t> element : ck_m->clique_mat[p]) {//map iterator **MAKE THIS FASTER BY ONLY ADDING ONES THERE WITH ITER
+					clique_matrix->clique_mat[p][element.first]+= element.second;
+			}
+		}
+	}
+
+	void add_to_thread_matrix(unsigned k) {
 		for(int i=0; i<pos; i=i+k) {  //<pos
 			for(int p=0; p < k; p++) {
 				for(int q=p+1;q<k;q++) {
-					ck_m.add_edge(ck_buf[i+p], ck_buf[i+q]);
-					ck_m.add_edge(ck_buf[i+q], ck_buf[i+p]);
+					ck_m->add_edge(ck_buf[i+p], ck_buf[i+q]);
+					ck_m->add_edge(ck_buf[i+q], ck_buf[i+p]);
 				}
 			}
 		}
 	}
 
-	void add_clique(unsigned k, unsigned * clique) {
+	void add_clique_to_buf(unsigned k, unsigned * clique) {
 		for (int i = 0; i < k; i++) {
 			ck_buf[pos] = clique[i];
 			pos++;
 		}
-		if (pos > 100000) {
-			add_to_matrix(k);
+		if (pos >= 10000*k) {
+			add_to_thread_matrix(k);
 			pos=0;
 		}
 	}
 
-void allocglobal(graph *g,unsigned k){
+void allocglobal(graph *g,unsigned k, unsigned number_of_nodes){
         #pragma omp parallel
         {
                 ck_p=(unsigned *)calloc(k,sizeof(unsigned));
                 ckdeg_p=(unsigned long long *)calloc(g->n,sizeof(unsigned long long));
-								ck_buf=(unsigned *)calloc(100000, sizeof(unsigned));
+								ck_buf=(unsigned *)calloc(10000*k, sizeof(unsigned));
 								pos = 0;
+								ck_m = new Clique_Matrix(number_of_nodes);
         }
         ckdeg=(unsigned long long *)calloc(g->n,sizeof(unsigned long long));
+				clique_matrix = new Clique_Matrix(number_of_nodes);
 }
 
 void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned long long *n, unsigned * node_map) {
@@ -481,7 +500,7 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 			(*n)++;//listing here!!!
 			//ADD EDGELIST AND PRINT MAPPED NODES
 			unsigned kclique[3] = {node_map[ck_p[1]], node_map[ck_p[2]], node_map[old[sg->nodes[1][i]]]};
-			add_clique(3, kclique);
+			add_clique_to_buf(3, kclique);
 			//printf("ADD CLIQUE %u,%u,%u\n", node_map[ck_p[1]], node_map[ck_p[2]], node_map[old[sg->nodes[1][i]]]);
 
 		}
@@ -512,7 +531,7 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 					count++;
 				}
 				(*n)++;//listing here!!!
-				add_clique(kmax, kclique);
+				add_clique_to_buf(kmax, kclique);
 				for (int m = 0; m <kmax; m++){
 					//printf("%u, ",kclique[m]);
 				}
@@ -579,8 +598,9 @@ unsigned long long kclique_main(unsigned char k, graph *g, unsigned * node_map) 
 			kclique_thread(k,k-2, sg, &n,node_map);
 
 		}
-		add_to_matrix(k);
+		add_to_thread_matrix(k);
 		pos=0;
+		combine_to_global_matrix();
 		free_subgraph(sg,k);
 		#pragma omp single
 		{
@@ -674,7 +694,7 @@ int main(int argc,char** argv){
 
 	unsigned i,n_m,e_m;
 	bool *rm=(bool*)calloc(g->n,sizeof(bool));
-	allocglobal(g,k);//allocataing global variables
+	allocglobal(g,k,number_of_nodes);//allocataing global variables
 	nck=kclique_main(k, g, el->node_map);
 
 	if (!test){
@@ -685,15 +705,13 @@ int main(int argc,char** argv){
 
 	t2=time(NULL);
 	t1=t2;
-	for(int p=0; p<number_of_nodes; p++) {
-    for (int q=0; q<number_of_nodes; q++) {
-			//find end not zero
-			std::unordered_map<std::pair<unsigned, unsigned>, unsigned, boost::hash<std::pair<unsigned, unsigned>>>::iterator it = ck_m.clique_mat.find(std::make_pair(p, q));
-			if (it != ck_m.clique_mat.end()) {
-      	printf("%u %u %u\n", p, q, it->second);
-			}
-    }
-  }
+	
+	//iterate through clique_matrix to print
+	for (int p = 0; p < ck_m->vector_length; p++) {//vector iterator
+		for (std::pair<unsigned, int64_t> element : clique_matrix->clique_mat[p]) {
+				printf("%u %u %lld\n", p, element.first, element.second);
+		}
+	}
 
 	if (!test) {
 		printf("- Overall time = %ldh%ldm%lds\n",(t2-t0)/3600,((t2-t0)%3600)/60,((t2-t0)%60));
