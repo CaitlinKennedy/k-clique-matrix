@@ -22,7 +22,7 @@ Will print the number of k-cliques and the density of the found kclique densest.
 #include <time.h>
 #include <omp.h>
 #include <unordered_map>
-#include <boost/functional/hash.hpp>
+#include <vector>
 
 
 #define NLINKS 100000000 //maximum number of edges for memory allocation, will increase if needed
@@ -121,6 +121,7 @@ edgelist* readedgelist(char* input){
 	unsigned s = 1;
 	unsigned t = 1;
 
+        fscanf(file, "%u %u %u", %s, %t, %w);
 	while (fscanf(file,"%u %u %u", &s, &t, &w)==3) {//Add one edge
 		if (s < t) {
 			(el->edges[el->e].s) = s;
@@ -705,11 +706,11 @@ int main(int argc,char** argv){
 
 	t2=time(NULL);
 	t1=t2;
-	
+
 	//iterate through clique_matrix to print
 	for (int p = 0; p < ck_m->vector_length; p++) {//vector iterator
 		for (std::pair<unsigned, int64_t> element : clique_matrix->clique_mat[p]) {
-				printf("%u %u %lld\n", p, element.first, element.second);
+				printf("%u %u %ld\n", p, element.first, element.second);
 		}
 	}
 
