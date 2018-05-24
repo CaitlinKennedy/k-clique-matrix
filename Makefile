@@ -53,7 +53,12 @@ test9:
 	@diff -q <(sort test.txt) <(sort tests/simplegraphtest9.txt)
 	@rm test.txt
 
-test: test1 test2 test3 test4 test5 test6 test8 test9
+test10:
+	@./kClistMatrix 2 5+ tests/simplegraph.txt 1 > test.txt
+	@diff -q <(sort test.txt) tests/simplegraphtest10.txt
+	@rm test.txt
+
+test: test1 test2 test3 test4 test5 test6 test8 test9 test10
 
 clean:
 	rm  kClistMatrix

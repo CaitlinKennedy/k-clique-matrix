@@ -33,6 +33,7 @@ class Clique_Matrix {
 		unsigned vector_length;
 		std::vector<std::unordered_map<unsigned, int64_t>> clique_mat;
 		void add_edge(unsigned, unsigned);
+		void add_edge_weight(unsigned, unsigned, unsigned);
 };
 
 Clique_Matrix::Clique_Matrix(unsigned number_of_nodes) {
@@ -42,6 +43,10 @@ Clique_Matrix::Clique_Matrix(unsigned number_of_nodes) {
 
 void Clique_Matrix::add_edge(unsigned p, unsigned q) {
 	clique_mat[p][q]++;
+}
+
+void Clique_Matrix::add_edge_weight(unsigned p, unsigned q, unsigned w) {
+	clique_mat[p][q] += w;
 }
 
 typedef struct {
@@ -627,26 +632,6 @@ unsigned long long kclique_main(unsigned char k, graph *g, unsigned * node_map) 
 	return n;
 }
 
-void rmnodes(bool *rm,edgelist* el){
-	unsigned long long i,r=0;
-	FILE* file=fopen("debug.txt","w");
-		for (i=0;i<el->e;i++){
-				if (((rm[el->edges[i].s]==1) || (rm[el->edges[i].t]==1)) == 0){
-					r++;
-									fprintf(file,"%u %u\n",el->edges[i].s,el->edges[i].t);
-				}
-		}
-	//printf("el0=%llu\n",r);
-	for (i=0;i<el->e;i++){
-//printf("%llu\n",i);
-		if ((rm[el->edges[i].s]==1) || (rm[el->edges[i].t]==1)){
-			el->edges[i--]=el->edges[--(el->e)];
-		}
-	}
-			//printf("el1=%u\n",el->e);
-			fclose(file);
-}
-
 int main(int argc,char** argv){
 	edgelist* el;
 	graph* g;
@@ -707,14 +692,37 @@ int main(int argc,char** argv){
 	}
 	t1=t2;
 
-	unsigned i,n_m,e_m;
-	bool *rm=(bool*)calloc(g->n,sizeof(bool));
-	allocglobal(g,k,number_of_nodes);//allocataing global variables
-	nck=kclique_main(k, g, el->node_map);
+	Clique_Matrix * clique_matrix_total;
+	if (sumC) {
+		//initialize clique matrix and number of cliques for tracking sum
+		unsigned nck_total = 0;
+		clique_matrix_total = new Clique_Matrix(number_of_nodes);
+		//iterate for all cliques from 2 to k and add entries to sum matrix
+		for (int k_c = 2; k_c <= k; k_c++) {
+			allocglobal(g,k,number_of_nodes);//allocataing global variables
+			nck=kclique_main(k_c, g, el->node_map);
+			nck_total +=nck;
 
-	if (!test){
-		printf("Number of %u-cliques: %llu\n",k,nck);
+			for (int p = 0; p < ck_m->vector_length; p++) {//vector iterator
+				for (std::pair<unsigned, int64_t> element : clique_matrix->clique_mat[p]) {
+						clique_matrix_total->add_edge_weight(p, element.first, element.second);
+				}
+			}
+		}
+		if (!test){
+			printf("Number of all cliques up to %u: %llu\n",k,nck_total);
+		}
 	}
+	else { //just run k clique
+		allocglobal(g,k,number_of_nodes);//allocataing global variables
+		nck=kclique_main(k, g, el->node_map);
+		if (!test){
+			printf("Number of %u-cliques: %llu\n",k,nck);
+		}
+		clique_matrix_total = clique_matrix;
+	}
+
+
 	unsigned long long r=0,r2=0;
 	free_graph(g);
 
@@ -722,8 +730,8 @@ int main(int argc,char** argv){
 	t1=t2;
 
 	//iterate through clique_matrix to print
-	for (int p = 0; p < ck_m->vector_length; p++) {//vector iterator
-		for (std::pair<unsigned, int64_t> element : clique_matrix->clique_mat[p]) {
+	for (int p = 0; p < clique_matrix_total->vector_length; p++) {//vector iterator
+		for (std::pair<unsigned, int64_t> element : clique_matrix_total->clique_mat[p]) {
 				printf("%u %u %ld\n", p, element.first, element.second);
 		}
 	}
