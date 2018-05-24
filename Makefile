@@ -9,41 +9,51 @@ kClistMatrix: kClistMatrix.cpp
 	$(CP) $(CFLAGS) kClistMatrix.cpp -o kClistMatrix -fopenmp
 
 test1:
-	@./kClistMatrix 1 3 tests/simplegraph.txt 1 > test1.txt
-	@diff -q <(sort test1.txt) tests/simplegraphtest3.txt
-	@rm test1.txt
+	@./kClistMatrix 1 3 tests/simplegraph.txt 1 > test.txt
+	@diff -q <(sort test.txt) tests/simplegraphtest3.txt
+	@rm test.txt
 
 test2:
-	@./kClistMatrix 1 4 tests/simplegraph.txt 1 > test2.txt
-	@diff -q <(sort test2.txt) tests/simplegraphtest4.txt
-	@rm test2.txt
+	@./kClistMatrix 1 4 tests/simplegraph.txt 1 > test.txt
+	@diff -q <(sort test.txt) tests/simplegraphtest4.txt
+	@rm test.txt
 
 test3:
-	@./kClistMatrix 1 5 tests/simplegraph.txt 1 > test3.txt
-	@diff -q <(sort test3.txt) tests/simplegraphtest5.txt
-	@rm test3.txt
+	@./kClistMatrix 1 5 tests/simplegraph.txt 1 > test.txt
+	@diff -q <(sort test.txt) tests/simplegraphtest5.txt
+	@rm test.txt
 
 test4:
-	@./kClistMatrix 1 3 tests/edgelist.txt 1 > test4.txt
-	@diff -q <(sort test4.txt) tests/edgelisttest3.txt
-	@rm test4.txt
+	@./kClistMatrix 1 3 tests/edgelist.txt 1 > test.txt
+	@diff -q <(sort test.txt) tests/edgelisttest3.txt
+	@rm test.txt
 
 test5:
-	@./kClistMatrix 1 4 tests/edgelist.txt 1 > test5.txt
-	@diff -q <(sort test5.txt) tests/edgelisttest4.txt
-	@rm test5.txt
+	@./kClistMatrix 1 4 tests/edgelist.txt 1 > test.txt
+	@diff -q <(sort test.txt) tests/edgelisttest4.txt
+	@rm test.txt
 
 test6:
-	@./kClistMatrix 1 5 tests/edgelist.txt 1 > test6.txt
-	@diff -q <(sort test6.txt) tests/edgelisttest5.txt
-	@rm test6.txt
+	@./kClistMatrix 1 5 tests/edgelist.txt 1 > test.txt
+	@diff -q <(sort test.txt) tests/edgelisttest5.txt
+	@rm test.txt
 
 test7:
-	@./kClistMatrix 2 3 tests/edgelist.txt 1 > test7.txt
-	@diff -q <(sort test7.txt) tests/edgelisttest3.txt
-	@rm test7.txt
+	@./kClistMatrix 2 3 tests/edgelist.txt 1 > test.txt
+	@diff -q <(sort test.txt) tests/edgelisttest3.txt
+	@rm test.txt
 
-test: test1 test2 test3 test4 test5 test6 test7
+test8:
+	@./kClistMatrix 2 2 tests/edgelist.txt 1 > test.txt
+	@diff -q <(sort test.txt) <(sort tests/edgelisttest8.txt)
+	@rm test.txt
+
+test9:
+	@./kClistMatrix 2 2 tests/simplegraph.txt 1 > test.txt
+	@diff -q <(sort test.txt) <(sort tests/simplegraphtest9.txt)
+	@rm test.txt
+
+test: test1 test2 test3 test4 test5 test6 test8 test9
 
 clean:
 	rm  kClistMatrix

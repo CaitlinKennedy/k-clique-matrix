@@ -121,7 +121,7 @@ edgelist* readedgelist(char* input){
 	unsigned s = 1;
 	unsigned t = 1;
 
-        fscanf(file, "%u %u %u", %s, %t, %w);
+        fscanf(file, "%u %u %u", &s, &t, &w);
 	while (fscanf(file,"%u %u %u", &s, &t, &w)==3) {//Add one edge
 		if (s < t) {
 			(el->edges[el->e].s) = s;
@@ -381,7 +381,6 @@ subgraph* allocsub(graph *g,unsigned char k){
 	return sg;
 }
 
-
 unsigned *old=NULL,*newN=NULL;//to improve
 #pragma omp threadprivate(newN,old)
 
@@ -449,7 +448,7 @@ int pos;
 	void combine_to_global_matrix() {
 		#pragma omp critical (mat)
 		for (int p = 0; p < ck_m->vector_length; p++) {//vector iterator
-			for (std::pair<unsigned, int64_t> element : ck_m->clique_mat[p]) {//map iterator **MAKE THIS FASTER BY ONLY ADDING ONES THERE WITH ITER
+			for (std::pair<unsigned, int64_t> element : ck_m->clique_mat[p]) {//map iterator
 					clique_matrix->clique_mat[p][element.first]+= element.second;
 			}
 		}
@@ -493,6 +492,14 @@ void allocglobal(graph *g,unsigned k, unsigned number_of_nodes){
 void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned long long *n, unsigned * node_map) {
 	unsigned i,j,k,end,u,v,w;
 
+	if (kmax==2){
+		ckdeg_p[ck_p[0]]++;
+		ckdeg_p[ck_p[1]]++;
+		(*n)++;
+		unsigned kclique[2] = {node_map[ck_p[0]], node_map[ck_p[1]]};
+		add_clique_to_buf(2, kclique);
+	}
+
 	if (kmax==3){//can be improved
 		for(i=0; i<sg->n[1]; i++){//list all nodes
 			ckdeg_p[old[sg->nodes[1][i]]]++;
@@ -503,9 +510,6 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 			unsigned kclique[3] = {node_map[ck_p[1]], node_map[ck_p[2]], node_map[old[sg->nodes[1][i]]]};
 			add_clique_to_buf(3, kclique);
 			//printf("ADD CLIQUE %u,%u,%u\n", node_map[ck_p[1]], node_map[ck_p[2]], node_map[old[sg->nodes[1][i]]]);
-
-		}
-		for (i=0;i < (sizeof (ckdeg_p) /sizeof (ckdeg_p[0]));i++) {
 		}
 		return;
 	}
@@ -595,9 +599,10 @@ unsigned long long kclique_main(unsigned char k, graph *g, unsigned * node_map) 
 		for(i=0; i<g->e; i++){
 			ck_p[k-1]=g->edges[i].s;
 			ck_p[k-2]=g->edges[i].t;
-			mksub(g,g->edges[i],sg,k);
+			if (k!=2) {
+				mksub(g,g->edges[i],sg,k);
+			}
 			kclique_thread(k,k-2, sg, &n,node_map);
-
 		}
 		add_to_thread_matrix(k);
 		pos=0;
@@ -645,7 +650,16 @@ void rmnodes(bool *rm,edgelist* el){
 int main(int argc,char** argv){
 	edgelist* el;
 	graph* g;
-	unsigned char k=atoi(argv[2]);
+	int sumC = 0;
+	unsigned char k;
+	if (argv[2][strlen(argv[2]) - 1] == '+') {
+		sumC = 1;
+		argv[2][strlen(argv[2]) -1] = '\0';
+		k=atoi(argv[2]);
+	}
+	else {
+		k=atoi(argv[2]);
+	}
 	unsigned long long nck;
 	unsigned test = 0;
 	if (argc > 4) {
