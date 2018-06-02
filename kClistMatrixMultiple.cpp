@@ -459,6 +459,7 @@ int pos;
 		}
 	}
 
+  //empty a thread's clique buffer into matrix
 	void add_to_thread_matrix() {
 		int i = 0;
 		while (i < pos) {  //<pos
@@ -476,6 +477,7 @@ int pos;
 		}
 	}
 
+	//add a clique of size k to the buffer for the thread, when buffer has less than kmax space, empty
 	void add_clique_to_buf(unsigned k, unsigned kmax, unsigned * clique) {
 		for (int i = 0; i < k; i++) {
 			ck_buf[pos] = clique[i];
@@ -483,12 +485,14 @@ int pos;
 		}
 		ck_buf[pos] = -1;
 		pos++;
-		if (pos >= 10000*kmax + kmax) {
+		//
+		if (pos >= 10000*kmax - kmax) {
 			add_to_thread_matrix();
 			pos=0;
 		}
 	}
 
+//allocate all the thread and global variables
 void allocglobal(graph *g,unsigned k, unsigned number_of_nodes){
         #pragma omp parallel
         {
@@ -505,7 +509,8 @@ void allocglobal(graph *g,unsigned k, unsigned number_of_nodes){
 void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned long long *n, unsigned * node_map, int sumC) {
 	unsigned i,j,k,end,u,v,w;
 
-	if (kmax==2 || (sumC && l <= 2)){
+	//edges
+	if (kmax==2 || (sumC && kmax-l == 2)){
 		ckdeg_p[ck_p[kmax - 2]]++;
 		ckdeg_p[ck_p[kmax - 1]]++;
 		(*n)++;
@@ -514,7 +519,8 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 		if (kmax==2) {return;}
 	}
 
-	if (kmax==3 || (sumC && l <= 2)){//if max is 3 or special cases for sum
+	//3 clique
+	if (kmax==3 || (sumC && kmax-l == 2)){//if max is 3 or special cases for sum
 		for(i=0; i<sg->n[l]; i++){//list all nodes
 			ckdeg_p[old[sg->nodes[l][i]]]++;
 			ckdeg_p[ck_p[kmax - 2]]++;
@@ -526,6 +532,7 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 		if (kmax==3) {return;}
 	}
 
+	//k-clique
 	if(l==2){
 		for(i=0; i<sg->n[2]; i++){//list all edges
 			u=sg->nodes[2][i];
@@ -533,8 +540,6 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 			for (j=u*sg->core;j<end;j++) {
 				unsigned * kclique = (unsigned *)malloc(kmax*sizeof(unsigned));
 				int count = 0;
-				//directly below is edge u,v
-				//insert u, v and v,  u
 				kclique[count] = node_map[old[u]];
 				count++;
 				kclique[count]= node_map[old[sg->adj[j]]];
@@ -546,7 +551,7 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 					kclique[count] = node_map[ck_p[l]];
 					count++;
 				}
-				(*n)++;//listing here!!!
+				(*n)++;//listing here!!
 				add_clique_to_buf(kmax, kmax, kclique);
 			}
 
@@ -555,6 +560,7 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 		return;
 	}
 
+	//not a tracked clique, or a lower order clique for sum
 	for(i=0; i<sg->n[l]; i++){
 		u=sg->nodes[l][i];
 		ck_p[l-1]=old[u];
@@ -563,23 +569,20 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 		end=u*sg->core+sg->d[l][u];
 		for (j=u*sg->core;j<end;j++){//relabeling nodes and forming U'.
 			if (sumC) {
-				unsigned * kclique = (unsigned *)malloc((l + 1)*sizeof(unsigned));
+				unsigned * kclique = (unsigned *)malloc((kmax-l+2)*sizeof(unsigned));
 				int count = 0;
-				//directly below is edge u,v
-				//insert u, v and v,  u
 				kclique[count] = node_map[old[u]];
 				count++;
 				kclique[count]= node_map[old[sg->adj[j]]];
 				count++;
 				ckdeg_p[old[sg->adj[j]]]++;
 				ckdeg_p[old[u]]++;
-				for (count = 2;count<l+1;count++){//ok to use l here :)
-					ckdeg_p[ck_p[count]]++;
-					kclique[count] = node_map[ck_p[count]];
+				for (int m=0; m<kmax -l;m++){
+					ckdeg_p[ck_p[count + m]]++;
+					kclique[count + m] = node_map[ck_p[l + m]];
 				}
 				(*n)++;//listing here!!!
-				//printf("%u %u %u %u\n", node_map[old[u]], node_map[old[sg->adj[j]]], node_map[ck_p [2]], node_map[ck_p[3]]);
-				add_clique_to_buf(kmax - l, kmax, kclique);
+				add_clique_to_buf(kmax - l + 2, kmax, kclique);
 			}
 
 			v=sg->adj[j];
@@ -603,7 +606,6 @@ void kclique_thread(unsigned char kmax, unsigned char l, subgraph *sg, unsigned 
 				}
 			}
 		}
-//add clique k-l
 		kclique_thread(kmax,l-1, sg, n, node_map, sumC);
 
 		for (j=0;j<sg->n[l-1];j++){//restoring labels
@@ -716,7 +718,12 @@ int main(int argc,char** argv){
 
 	allocglobal(g,k,number_of_nodes);//allocataing global variables
 	nck=kclique_main(k, g, el->node_map, sumC);
-	if (!test){
+
+	if (!test && sumC){
+		printf("Number of all cliques up to %u: %llu\n",k,nck);
+	}
+
+	if (!test && !sumC){
 		printf("Number of %u-cliques: %llu\n",k,nck);
 	}
 

@@ -709,8 +709,12 @@ int main(int argc,char** argv){
 				}
 			}
 		}
-		if (!test){
+		if (!test && sumC){
 			printf("Number of all cliques up to %u: %llu\n",k,nck_total);
+		}
+
+		if (!test && !sumC){
+			printf("Number of %u-cliques: %llu\n",k,nck);
 		}
 	}
 	else { //just run k clique
