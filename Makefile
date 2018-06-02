@@ -3,13 +3,13 @@ CC=gcc-7
 CFLAGS=-O9
 CP=g++-7
 
-all: kClistMatrix kClistMultiple test
+all: kClistMatrix kClistMatrixSlow test
 
-kClistMatrixSlow: kClistMatrix.cpp
-	$(CP) $(CFLAGS) kClistMatrix.cpp -o kClistMatrixSlow -fopenmp
+kClistMatrixSlow: kClistMatrixSlow.cpp
+	$(CP) $(CFLAGS) kClistMatrixSlow.cpp -o kClistMatrixSlow -fopenmp
 
-kClistMatrix: kClistMatrixMultiple.cpp
-	$(CP) $(CFLAGS) kClistMatrixMultiple.cpp -o kClistMatrix -fopenmp
+kClistMatrix: kClistMatrix.cpp
+	$(CP) $(CFLAGS) kClistMatrix.cpp -o kClistMatrix -fopenmp
 
 test1:
 	@./kClistMatrix 1 3 tests/simplegraph.txt 1 > test.txt
@@ -66,4 +66,4 @@ test: test1 test2 test3 test4 test5 test6 test8 test9 test10
 $
 
 clean:
-	rm  kClistMatrix kClistMultiple
+	rm  kClistMatrix kClistMatrixSlow
